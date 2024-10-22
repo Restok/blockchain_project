@@ -1,0 +1,7 @@
+{
+  "publicOwnerAddress": 123456789,
+  "tokenId": 1,
+  "threshold": 1000,
+  "privateKey": 987654321,
+  "tokenValue": 1500
+}
