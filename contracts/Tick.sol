@@ -4,12 +4,21 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@iden3/contracts/lib/Poseidon.sol";
+
+interface IGroth16Verifier {
+    function verifyProof(
+        uint[2] calldata _pA,
+        uint[2][2] calldata _pB,
+        uint[2] calldata _pC,
+        uint[1] calldata _pubSignals
+    ) external view returns (bool);
+}
 
 contract Tick is ERC721, ERC721Burnable, Ownable {
     uint256 private _nextTokenId;
     mapping(uint256 => int256) private _tokenValues;
     mapping(uint256 => uint256) private _lastUpdateTime;
-    ZKPVerifier public zkpVerifier;
 
     struct TokenParams {
         uint8 p;
@@ -17,29 +26,13 @@ contract Tick is ERC721, ERC721Burnable, Ownable {
         int256 incrementAmount;
     }
     mapping(uint256 => TokenParams) private _tokenParams;
+    IGroth16Verifier public verifier;
 
     constructor(
         address initialOwner,
-        uint8 initialP
-    ) ERC721("Tick", "TICK") Ownable(initialOwner) {}
-
-    function verifyValueProof(
-        uint256 tokenId,
-        uint256 threshold,
-        uint256[2] memory a,
-        uint256[2][2] memory b,
-        uint256[2] memory c,
-        uint256[3] memory input
-    ) public view returns (bool) {
-        require(_isValidToken(tokenId), "Token does not exist");
-        require(
-            input[0] == uint256(uint160(ownerOf(tokenId))),
-            "Invalid owner"
-        );
-        require(input[1] == tokenId, "Invalid token ID");
-        require(input[2] == threshold, "Invalid threshold");
-
-        return zkpVerifier.verifyProof(a, b, c, input);
+        address _verifier
+    ) ERC721("Tick", "TICK") Ownable(initialOwner) {
+        verifier = IGroth16Verifier(_verifier);
     }
 
     function safeMint(
@@ -64,16 +57,17 @@ contract Tick is ERC721, ERC721Burnable, Ownable {
     ) internal view returns (int256) {
         TokenParams memory params = _tokenParams[tokenId];
         uint256 timePassed = block.timestamp - _lastUpdateTime[tokenId];
-        uint256 updates = timePassed / params.updateInterval;
+        // uint256 updates = timePassed / params.updateInterval;
         int256 currentValue = _tokenValues[tokenId];
-
-        // for (uint256 i = 0; i < updates; i++) {
-        if (_random(tokenId, updates) < params.p) {
-            currentValue += params.incrementAmount * int256(updates);
+        require(timePassed >= params.updateInterval, "Not enough time passed");
+        if (_random(tokenId, 1) < params.p) {
+            currentValue += params.incrementAmount;
         } else {
-            currentValue -= params.incrementAmount * int256(updates);
+            currentValue -= params.incrementAmount;
         }
-        // }
+        if (currentValue < 0) {
+            currentValue = 0;
+        }
 
         return currentValue;
     }
@@ -82,7 +76,6 @@ contract Tick is ERC721, ERC721Burnable, Ownable {
         return tokenId < _nextTokenId && _ownerOf(tokenId) != address(0);
     }
 
-    // generate pseudo-random number
     function _random(
         uint256 tokenId,
         uint256 nonce
@@ -95,8 +88,24 @@ contract Tick is ERC721, ERC721Burnable, Ownable {
             );
     }
 
+    function submitProof(
+        uint256[2] memory a,
+        uint256[2][2] memory b,
+        uint256[2] memory c,
+        uint256[1] memory input
+    ) public view returns (bool) {
+        bool result = verifier.verifyProof(a, b, c, input);
+        require(result, "Invalid Proof");
+        return true;
+    }
+
     function tokenValue(uint256 tokenId) public view returns (int256) {
         require(_isValidToken(tokenId), "Token does not exist");
-        return _calculateCurrentValue(tokenId);
+        return _tokenValues[tokenId];
+    }
+
+    function updateTokenValue(uint256 tokenId) public {
+        _tokenValues[tokenId] = _calculateCurrentValue(tokenId);
+        _lastUpdateTime[tokenId] = block.timestamp;
     }
 }

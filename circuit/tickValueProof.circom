@@ -5,31 +5,27 @@ include "../node_modules/circomlib/circuits/comparators.circom";
 
 template TickValueProof() {
     // Public inputs
-    signal input publicOwnerAddress;
-    signal input tokenId;
     signal input threshold;
+    signal input tokenValueHash;
 
     // Private inputs
-    signal input privateKey;
+    signal input tokenId;
     signal input tokenValue;
 
-    // Intermediate signals
-    signal calculatedAddress;
+    // Hash the tokenId and tokenValue
+    component hasher = Poseidon(2);
+    hasher.inputs[0] <== tokenId;
+    hasher.inputs[1] <== tokenValue;
 
-    // 1. Prove ownership
-    // Hash the private key to get the public address
-    component hasher = Poseidon(1);
-    hasher.inputs[0] <== privateKey;
-    calculatedAddress <== hasher.out;
-
-    // Check if calculated address matches the public owner address
-    calculatedAddress === publicOwnerAddress;
-
-    // 2. Prove token value is above threshold
     component greaterThan = GreaterThan(252);
     greaterThan.in[0] <== tokenValue;
     greaterThan.in[1] <== threshold;
-    greaterThan.out === 1;
+
+    signal output isValid;
+    component equalityCheck = IsEqual();
+    equalityCheck.in[0] <== hasher.out;
+    equalityCheck.in[1] <== tokenValueHash;
+    isValid <== greaterThan.out * equalityCheck.out;
 }
 
 component main = TickValueProof();

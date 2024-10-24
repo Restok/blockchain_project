@@ -1,7 +1,6 @@
 {
-  "publicOwnerAddress": 123456789,
-  "tokenId": 1,
-  "threshold": 1000,
-  "privateKey": 987654321,
-  "tokenValue": 1500
+  "threshold": "1000",
+  "tokenValueHash": "19791001102241403755906021387252019600322691459648371044204920345731193976289",
+  "tokenId": "1018604955340427",
+  "tokenValue": "1679"
 }
